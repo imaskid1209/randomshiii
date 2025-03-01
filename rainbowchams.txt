@@ -1,0 +1,173 @@
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+-- ESP Core Configuration
+getgenv().ChamsSettings = {
+    ESPEnabled = true,
+    ESPMode = "Enemy",
+    CurrentColor = Color3.new(1, 1, 1),
+    RainbowEnabled = false
+}
+
+-- ESP Functions (Fixed and Integrated)
+local function applyESP(plr)
+    if plr ~= player and plr.Character then
+        local char = plr.Character
+        if not char:FindFirstChildOfClass("Highlight") then
+            local highlight = Instance.new("Highlight")
+            highlight.Parent = char
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0.1
+        end
+        local highlight = char:FindFirstChildOfClass("Highlight")
+        if highlight then
+            highlight.FillColor = getgenv().ChamsSettings.CurrentColor
+        end
+    end
+end
+
+local function removeESP(plr)
+    if plr.Character then
+        local highlight = plr.Character:FindFirstChildOfClass("Highlight")
+        if highlight then highlight:Destroy() end
+    end
+end
+
+local function updateESP()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            if getgenv().ChamsSettings.ESPEnabled then
+                if getgenv().ChamsSettings.ESPMode == "Enemy" and plr.Team ~= player.Team then
+                    applyESP(plr)
+                elseif getgenv().ChamsSettings.ESPMode == "All" then
+                    applyESP(plr)
+                else
+                    removeESP(plr)
+                end
+            else
+                removeESP(plr)
+            end
+        end
+    end
+end
+
+-- Smooth Rainbow Chams Effect
+local function updateRainbowChams()
+    while getgenv().ChamsSettings.RainbowEnabled do
+        for i = 0, 1, 0.005 do
+            local color = Color3.fromHSV(i, 1, 1)
+            getgenv().ChamsSettings.CurrentColor = color
+            updateESP()
+            task.wait(0.03)
+        end
+    end
+end
+
+-- Ensure new players also get ESP applied
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function()
+        task.wait(1) -- Give some time for character to load
+        updateESP()
+    end)
+end)
+
+-- UI Setup
+local Window = Library:CreateWindow({
+    Title = 'ESP Controller',
+    Center = true,
+    AutoShow = true
+})
+
+local Tabs = {
+    Main = Window:AddTab('Main'),
+    Settings = Window:AddTab('Settings')
+}
+
+-- Main Controls
+local ESPGroup = Tabs.Main:AddLeftGroupbox('ESP Controls')
+
+ESPGroup:AddToggle('ESPEnabled', {
+    Text = 'Enable ESP',
+    Default = true,
+    Tooltip = 'Toggle ESP system',
+    Callback = function(Value)
+        getgenv().ChamsSettings.ESPEnabled = Value
+        updateESP()
+    end
+})
+
+ESPGroup:AddDropdown('ESPMode', {
+    Values = {'Enemy', 'All'},
+    Default = 1,
+    Text = 'ESP Mode',
+    Tooltip = 'Select targets to highlight',
+    Callback = function(Value)
+        getgenv().ChamsSettings.ESPMode = Value
+        updateESP()
+    end
+})
+
+local ColorPicker = ESPGroup:AddLabel('ESP Color'):AddColorPicker('ColorPicker', {
+    Default = Color3.new(1, 1, 1),
+    Callback = function(Value)
+        if not getgenv().ChamsSettings.RainbowEnabled then
+            getgenv().ChamsSettings.CurrentColor = Value
+            updateESP()
+        end
+    end
+})
+
+ESPGroup:AddToggle('RainbowMode', {
+    Text = 'Rainbow Effect',
+    Default = false,
+    Tooltip = 'Cycle through colors automatically',
+    Callback = function(Value)
+        getgenv().ChamsSettings.RainbowEnabled = Value
+        if Value then
+            updateRainbowChams()
+            ColorPicker:SetValueRGB(Color3.new(1,1,1)) -- Reset picker
+        end
+    end
+})
+
+-- Advanced Settings
+local SettingsGroup = Tabs.Settings:AddLeftGroupbox('Performance')
+
+SettingsGroup:AddSlider('UpdateSpeed', {
+    Text = 'Update Rate (Hz)',
+    Default = 30,
+    Min = 10,
+    Max = 60,
+    Rounding = 0,
+    Callback = function(Value)
+        getgenv().UpdateInterval = 1/Value
+    end
+})
+
+-- Initialize
+Library:SetWatermark('ESP System Active | LinoriaLib')
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+-- Handle unloading
+Library:OnUnload(function()
+    getgenv().ChamsSettings.ESPEnabled = false
+    updateESP() -- Remove all highlights
+    print('ESP System Unloaded')
+end)
+
+-- Start ESP loop
+coroutine.wrap(function()
+    while true do
+        if getgenv().ChamsSettings.ESPEnabled then
+            updateESP()
+        end
+        task.wait(getgenv().UpdateInterval or 0.03)
+    end
+end)()
